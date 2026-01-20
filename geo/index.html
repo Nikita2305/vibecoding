@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-eval' 'unsafe-inline' https: data: blob:; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://api.mapbox.com https://*.mapbox.com blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://api.mapbox.com https://*.mapbox.com; font-src 'self' data: https://*.mapbox.com https://demotiles.mapbox.com blob:; img-src 'self' data: blob: https:; connect-src 'self' https://api.mapbox.com https://*.mapbox.com https://*.openstreetmap.org https://nominatim.openstreetmap.org;">
+  <title>Travel Route Animation</title>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+  <script>
+    // Set Mapbox token if available (optional)
+    if (typeof process === 'undefined') {
+      window.process = { env: {} };
+    }
+    // Token will be injected by server here
+  </script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #000;
+    }
+    
+    #map {
+      width: 100vw;
+      height: 100vh;
+      min-height: 400px;
+      background: #2d2d2d;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    
+    .city-label {
+      position: absolute;
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 20px;
+      font-weight: 600;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -100%) scale(0.8);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 30px rgba(100, 150, 255, 0.4);
+      z-index: 1000;
+    }
+    
+    .city-label.visible {
+      opacity: 1;
+      transform: translate(-50%, -100%) scale(1);
+    }
+    
+    .city-label.glowing {
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 40px rgba(100, 150, 255, 0.8);
+    }
+    
+    .controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 2000;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 15px 20px;
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+    }
+    
+    .controls button {
+      background: rgba(255, 255, 255, 0.2);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .controls button:hover {
+      background: rgba(255, 255, 255, 0.3);
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .controls button:active {
+      transform: scale(0.95);
+    }
+    
+    .file-input-wrapper {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 2000;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 15px 20px;
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+    }
+    
+    .file-input-wrapper input[type="file"] {
+      display: none;
+    }
+    
+    .file-input-wrapper label {
+      display: block;
+      color: white;
+      font-size: 14px;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    
+    .file-input-wrapper button {
+      background: rgba(100, 150, 255, 0.8);
+      border: none;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      width: 100%;
+    }
+    
+    .file-input-wrapper button:hover {
+      background: rgba(100, 150, 255, 1);
+    }
+    
+    .time-display {
+      color: white;
+      font-size: 18px;
+      font-weight: 600;
+      min-width: 100px;
+      text-align: center;
+      padding: 10px;
+    }
+    
+    .status {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 2000;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="city-label" class="city-label"></div>
+  
+  <div class="controls">
+    <button id="play-btn" onclick="togglePlay()">▶️ Воспроизвести</button>
+    <div class="time-display" id="time-display">0:00 / 0:00</div>
+  </div>
+  
+  <script src="app/renderer.js"></script>
+  <script>
+    let animationId = null;
+    let isPlaying = false;
+    let startTime = null;
+    let pausedTime = 0;
+    let totalDuration = 0;
+    
+    async function initAnimation() {
+      // Wait for renderer to be ready
+      if (!window.rendererReady) {
+        await new Promise(resolve => {
+          window.onRendererReady = resolve;
+        });
+      }
+      
+      try {
+        // Load route data from server
+        const response = await fetch('/route-data.json');
+        if (!response.ok) {
+          throw new Error('Failed to load route data. Make sure you started the server with --input option.');
+        }
+        
+        const routeData = await response.json();
+        
+        // Token should already be set by server injection, but update if provided
+        if (routeData.mapboxToken && !window.mapboxToken) {
+          window.mapboxToken = routeData.mapboxToken;
+          if (typeof mapboxgl !== 'undefined') {
+            mapboxgl.accessToken = routeData.mapboxToken;
+          }
+          console.log('✓ Mapbox token loaded from route data');
+        }
+        
+        // Set data directly (geocoding already done on server)
+        window.routeData = routeData;
+        totalDuration = routeData.totalDuration || routeData.video?.duration_sec || 0;
+        
+        // Initialize renderer with pre-geocoded data
+        await window.loadPreparedRouteData(routeData);
+        
+        // Ensure map is visible and rendered
+        if (window.map) {
+          setTimeout(() => {
+            if (window.map && window.map.isStyleLoaded()) {
+              window.map.resize();
+              window.map.triggerRepaint();
+              console.log('✓ Map forced repaint after data load');
+            }
+          }, 300);
+        }
+        
+        updateTimeDisplay(0);
+        console.log('✓ Route loaded:', routeData.route.length, 'cities');
+        console.log('✓ Total duration:', totalDuration, 'seconds');
+      } catch (error) {
+        console.error('Error loading route:', error);
+        alert('Ошибка загрузки маршрута: ' + error.message + '\n\nУбедитесь, что:\n1. Запустили сервер командой: node cli/serve.js --input example-route.json\n2. Добавили MAPBOX_TOKEN в .env файл');
+      }
+    }
+    
+    function togglePlay() {
+      console.log('Toggle play - map:', !!window.map, 'rendererReady:', window.rendererReady, 'routeData:', !!window.routeData);
+      
+      if (!window.map || !window.rendererReady || !window.routeData) {
+        console.error('Cannot play: map or data not ready');
+        alert('Маршрут не загружен!\n\nЗапустите сервер командой:\nnode cli/serve.js --input example-route.json');
+        return;
+      }
+      
+      if (totalDuration === 0) {
+        console.error('Total duration is 0');
+        alert('Длительность анимации равна нулю. Проверьте данные маршрута.');
+        return;
+      }
+      
+      if (isPlaying) {
+        pauseAnimation();
+      } else {
+        playAnimation();
+      }
+    }
+    
+    function playAnimation() {
+      isPlaying = true;
+      startTime = Date.now() - pausedTime;
+      document.getElementById('play-btn').textContent = '⏸️ Пауза';
+      
+      function animate() {
+        if (!isPlaying) return;
+        
+        const elapsed = (Date.now() - startTime) / 1000;
+        const progress = Math.min(elapsed / totalDuration, 1);
+        const currentTime = progress * totalDuration;
+        
+        if (window.updateTime) {
+          window.updateTime(currentTime);
+        }
+        
+        updateTimeDisplay(currentTime);
+        
+        if (progress < 1) {
+          animationId = requestAnimationFrame(animate);
+        } else {
+          pauseAnimation();
+        }
+      }
+      
+      animate();
+    }
+    
+    function pauseAnimation() {
+      isPlaying = false;
+      pausedTime = Date.now() - startTime;
+      document.getElementById('play-btn').textContent = '▶️ Воспроизвести';
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+    }
+    
+    
+    function updateTimeDisplay(current) {
+      const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${String(secs).padStart(2, '0')}`;
+      };
+      
+      document.getElementById('time-display').textContent = 
+        `${formatTime(current)} / ${formatTime(totalDuration)}`;
+    }
+    
+    // Load route data when page loads
+    window.addEventListener('load', async () => {
+      // Wait a bit for Mapbox GL to load
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await initAnimation();
+    });
+  </script>
+</body>
+</html>
+

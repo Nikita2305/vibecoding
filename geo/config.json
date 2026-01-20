@@ -1,0 +1,14 @@
+{
+  "defaults": {
+    "fps": 30,
+    "resolution": "1080x1920",
+    "map_style": "dark",
+    "language": "ru",
+    "hold_sec": 0.8,
+    "label_show_sec": 0.3,
+    "label_hide_sec": 0.25,
+    "t_min": 1.2,
+    "t_max": 12.0
+  }
+}
+

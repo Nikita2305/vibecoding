@@ -1,0 +1,8 @@
+node_modules/
+output/
+*.mp4
+*.png
+.env
+geocode_cache.json
+.DS_Store
+

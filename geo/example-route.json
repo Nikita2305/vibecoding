@@ -1,0 +1,17 @@
+{
+  "video": {
+    "duration_sec": 45,
+    "fps": 30,
+    "resolution": "1080x1920",
+    "map_style": "dark",
+    "language": "ru"
+  },
+  "route": [
+    {"city": "Warsaw", "country": "Poland"},
+    {"city": "Berlin", "country": "Germany", "transport": "train"},
+    {"city": "Paris", "country": "France", "transport": "plane"},
+    {"city": "Lyon", "country": "France", "transport": "car"},
+    {"city": "Rome", "country": "Italy", "transport": "plane"}
+  ]
+}
+
